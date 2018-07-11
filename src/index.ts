@@ -86,7 +86,7 @@ export default class Mqtt {
         if (this.cb[e]) {
             this.cb[e].forEach(element => {
                 if (element instanceof Function) {
-                    element(...data)
+                    element(data)
                 }
             });
         }
