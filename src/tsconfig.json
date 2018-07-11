@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "es2018",
+        "sourceMap": true,
+        "outDir": "../dist",
+        "declaration": true,
+        "experimentalDecorators": true,
+        "removeComments": true,
+        "preserveConstEnums": true,
+        "lib": [
+            "es2015",
+            "es2017",
+            "dom"
+        ]
+    },
+    "exclude": [
+        "node_modules"
+    ]
+}
