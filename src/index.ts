@@ -21,9 +21,13 @@ export default class Mqtt {
         this.uuid = uuid;
         client.on('connect', this.connected)
         client.on('error', this.error)
-        client.on('message', this.message)
+        client.on('message', (topic: any, payload: any) => {
+            this.message(topic, payload)
+        })
+        this.client = client;
     }
     message(topic: string, payload: string) {
+        payload = payload.toString();
         let all = payload.substr(0, 1) == '1'
         let spos = payload.indexOf('|');
         let uuid = payload.substr(1, spos - 1)
@@ -84,9 +88,9 @@ export default class Mqtt {
     }
     fire(e: MqttEvent | string, data: any) {
         if (this.cb[e]) {
-            this.cb[e].forEach(element => {
-                if (element instanceof Function) {
-                    element(data)
+            this.cb[e].forEach(s => {
+                if (s instanceof Function) {
+                    s(data)
                 }
             });
         }
