@@ -42,7 +42,7 @@ export default class Mqtt {
     async message(topic: string, payload: Buffer) {
         try {
             let r = this.decode(payload)
-            if (r.all || (r.uuid == this.uuid)) {
+            if (r.all || (r.uuid != this.uuid)) {
                 if (r.type == DataType.RPC) {
                     if (this.reqPrefix == topic.substr(0, this.reqPrefix.length)) {
                         //请求
@@ -140,6 +140,9 @@ export default class Mqtt {
     cmds: any = {};
     service(command: string, cb: Function) {
         this.cmds[command] = cb
+        this.subscribe(`${this.reqPrefix}/${this.uuid}/${command}/#`, QosType.ONLY_ONE, async (data) => {
+            // return await cb(data.data)
+        })
     }
     decode(data: Buffer): {
         all: boolean,
@@ -167,6 +170,8 @@ export default class Mqtt {
         } else if (rs.type == DataType.Number) {
             rs.data = Number(str.substr(splitPos + 1))
         } else if (rs.type == DataType.Object) {
+            rs.data = JSON.parse(str.substr(splitPos + 1))
+        } else if (rs.type == DataType.RPC) {
             rs.data = JSON.parse(str.substr(splitPos + 1))
         }
         return rs;
@@ -238,12 +243,12 @@ export default class Mqtt {
 }
 function match(topic: string, rule: string) {
     let exp = rule
-    switch (rule.substr(rule.length - 2)) {
+    switch (rule.substr(-1)) {
         case '#':
-            exp = rule.replace('#', '[A-Za-z0-9/]+')
+            exp = rule.replace(/\#/, '[A-Za-z0-9/]+')
             break;
         case '+':
-            exp = rule.replace('+', '[A-Za-z0-9]+')
+            exp = rule.replace(/\+/, '[A-Za-z0-9]+')
             break;
     }
     return new RegExp(exp).test(topic)

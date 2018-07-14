@@ -1,5 +1,6 @@
+# mqtt
+```
 import Mqtt, { DataType } from ".";
-const uuid = 'abc'
 const mqtt1 = new Mqtt('tcp://180.97.81.190:1883', 'tester/', 'mqtt1')
 const mqtt2 = new Mqtt('tcp://180.97.81.190:1883', 'tester/', 'mqtt2')
 const inter = {
@@ -20,3 +21,4 @@ setInterval(() => {
         console.log(data)
     })
 }, 1000)
+```
