@@ -103,10 +103,10 @@ export default class Mqtt {
         this.fire(MqttEvent.CONNECTED, {})
         this.isconnected = true;
         this.noconnected.sub.forEach((r: any) => {
-            this.subscribe.apply(this, ...r)
+            this.subscribe.apply(this, [...r])
         })
         this.noconnected.pub.forEach((r: any) => {
-            this.publish.apply(this, ...r)
+            this.publish.apply(this, [...r])
         })
         this.noconnected.sub = [];
         this.noconnected.pub = [];
