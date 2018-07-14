@@ -114,7 +114,7 @@ export default class Mqtt {
         }
         return rs;
     }
-    subscribe(topic: string | string[], type: number, cb: (data: string, uuid: string, i: string) => void) {
+    subscribe(topic: string | string[], type: number, cb: (data: { all?: boolean, topic?: string, data?: any, uuid?: string }) => void) {
         if (topic instanceof Array) {
             topic.forEach(e => {
                 this.on(e, cb)
@@ -167,11 +167,7 @@ export default class Mqtt {
             }
         }
     }
-    on(e: MqttEvent | string, cb: Function) {
-        if ('string' == typeof e && ['#', '+', '$'].indexOf(e.substr(e.length - 2)) > -2) {
-            let p = e.substr(e.length - 2);
-
-        }
+    on(e: MqttEvent | string, cb: (data: { all?: boolean, topic?: string, data?: any, uuid?: string }) => void) {
         if (!this.cb[e]) {
             this.cb[e] = []
         }
