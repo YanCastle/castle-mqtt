@@ -1,5 +1,4 @@
 import { connect } from 'mqtt'
-import { EventEmitter } from 'events';
 export enum QosType {
     ONLY_ONE = 2,
     LESS_ONE = 1,
@@ -17,7 +16,9 @@ export enum DataType {
     Number,
     Object,
     Boolean,
-    Event
+    Event,
+    RPC,
+    UNKNOW
 }
 export default class Mqtt {
     client;
@@ -25,26 +26,59 @@ export default class Mqtt {
     uuid: string = '';
     cb: any = {};
     match: any = {};
+    reqPrefix = 'req'
+    repPrefix = 'rep'
     constructor(url: string, prefix: string = '', uuid: string = '') {
         let client = connect(url)
         this.prefix = prefix;
         this.uuid = uuid;
         client.on('connect', this.connected)
         client.on('error', this.error)
-        client.on('message', (topic: any, payload: any) => {
-            this.message(topic, payload)
+        client.on('message', (topic: string, payload: any) => {
+            this.message(topic.replace(this.prefix, ''), payload)
         })
         this.client = client;
     }
-    message(topic: string, payload: Buffer) {
-        let r = this.decode(payload)
-        if (r.all || (r.uuid == this.uuid)) {
-            this.fire(topic.replace(this.prefix, ''), {
-                data: r.data,
-                uuid: r.uuid,
-                all: r.all,
-                topic
-            })
+    async message(topic: string, payload: Buffer) {
+        try {
+            let r = this.decode(payload)
+            if (r.all || (r.uuid == this.uuid)) {
+                if (r.type == DataType.RPC) {
+                    if (this.reqPrefix == topic.substr(0, this.reqPrefix.length)) {
+                        //请求
+                        let [cmd, msgid] = topic.replace(`${this.reqPrefix}/${this.uuid}/`, '').split('/')
+                        let reptopic = topic.replace(`${this.reqPrefix}/`, `${this.repPrefix}/`).replace(this.uuid, r.uuid);
+                        if (this.cmds[cmd] && this.cmds[cmd] instanceof Function) {
+                            let rs = undefined;
+                            try {
+                                rs = await this.cmds[cmd](r.data)
+                                // 判断是否需要返回                            
+                            } catch (error) {
+
+                            } finally {
+                                this.publish(reptopic, rs, false)
+                            }
+                        }
+                    } else {
+                        // 响应来到
+                        this.fire(topic, {
+                            data: r.data,
+                            uuid: r.uuid,
+                            all: r.all,
+                            topic
+                        })
+                    }
+                } else {
+                    this.fire(topic, {
+                        data: r.data,
+                        uuid: r.uuid,
+                        all: r.all,
+                        topic
+                    })
+                }
+            }
+        } catch (error) {
+            this.fire('error', error)
         }
     }
     connected() { }
@@ -55,26 +89,31 @@ export default class Mqtt {
             topic, data, all
         })
     }
-    encode(data: any, all: boolean): Buffer {
+    encode(data: any, all: boolean, type: DataType = DataType.UNKNOW): Buffer {
         let r = {
             all,
             data,
             uuid: this.uuid,
-            type: 0,
+            type,
         }
         if ("string" == typeof data) {
-            r.type = DataType.String
+            if (type == DataType.UNKNOW)
+                r.type = DataType.String
             r.data = Buffer.alloc(data.length, data)
         } else if (data instanceof Buffer) {
-            r.type = DataType.Buffer
+            if (type == DataType.UNKNOW)
+                r.type = DataType.Buffer
         } else if ('boolean' == typeof data) {
-            r.type = DataType.Boolean
+            if (type == DataType.UNKNOW)
+                r.type = DataType.Boolean
             r.data = Buffer.alloc(1, data ? '1' : '0')
         } else if ('number' == typeof data) {
-            r.type = DataType.Number
+            if (type == DataType.UNKNOW)
+                r.type = DataType.Number
             r.data = Buffer.alloc(data.toString().length, data.toString())
         } else if ('object' == typeof data) {
-            r.type = DataType.Object;
+            if (type == DataType.UNKNOW)
+                r.type = DataType.Object;
             let d = JSON.stringify(data)
             r.data = Buffer.alloc(d.length, d)
         }
@@ -83,6 +122,24 @@ export default class Mqtt {
         Buffer.alloc(3 + r.uuid.length, `${r.all ? 1 : 0}${r.type}${r.uuid}|`).copy(d, 0)
         r.data.copy(d, 3 + r.uuid.length)
         return d;
+    }
+    msgid = 0;
+    request(who: string, command: string, data: any, cb: Function) {
+        let reqtopic = `${this.reqPrefix}/${who}/${command.replace('/', '|')}/${this.msgid}`
+        let reptopic = reqtopic.replace(`${this.reqPrefix}/`, `${this.repPrefix}/`).replace(who, this.uuid);
+        this.subscribe(reptopic, QosType.ONLY_ONE, (data) => {
+            cb(data.data)
+            this.unsubscribe(reptopic)
+        })
+        this.client.publish(this.prefix + reqtopic, this.encode(data, false, DataType.RPC))
+        this.fire(MqttEvent.PUBLISHED, {
+            reqtopic, data, all: false
+        })
+        this.msgid++;
+    }
+    cmds: any = {};
+    service(command: string, cb: Function) {
+        this.cmds[command] = cb
     }
     decode(data: Buffer): {
         all: boolean,
