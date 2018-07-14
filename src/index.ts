@@ -42,7 +42,8 @@ export default class Mqtt {
             this.fire(topic.replace(this.prefix, ''), {
                 data: r.data,
                 uuid: r.uuid,
-                all: r.all
+                all: r.all,
+                topic
             })
         }
     }
