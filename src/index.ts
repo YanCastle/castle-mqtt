@@ -1,14 +1,15 @@
 import { connect } from 'mqtt'
+import { EventEmitter } from 'events';
 export enum QosType {
     ONLY_ONE = 2,
     LESS_ONE = 1,
     NOT_ENSURE = 0
 }
 export enum MqttEvent {
-    PUBLISHED = 0,
-    SUBSCRIBED = 1,
-    UNSUBSCRIBED = 2,
-    CONNECTED = 3,
+    PUBLISHED,
+    SUBSCRIBED,
+    UNSUBSCRIBED,
+    CONNECTED,
 }
 export enum DataType {
     Buffer,
@@ -23,6 +24,7 @@ export default class Mqtt {
     prefix: string = '';
     uuid: string = '';
     cb: any = {};
+    match: any = {};
     constructor(url: string, prefix: string = '', uuid: string = '') {
         let client = connect(url)
         this.prefix = prefix;
@@ -144,15 +146,31 @@ export default class Mqtt {
         })
     }
     fire(e: MqttEvent | string, data: any) {
-        if (this.cb[e]) {
-            this.cb[e].forEach(s => {
-                if (s instanceof Function) {
-                    s(data)
+        if ('string' == typeof e) {
+            Object.keys(this.cb).forEach((rule: string) => {
+                if (match(e, rule)) {
+                    this.cb[rule].forEach(s => {
+                        if (s instanceof Function) {
+                            s(data)
+                        }
+                    });
                 }
-            });
+            })
+        } else {
+            if (this.cb[e]) {
+                this.cb[e].forEach(s => {
+                    if (s instanceof Function) {
+                        s(data)
+                    }
+                });
+            }
         }
     }
     on(e: MqttEvent | string, cb: Function) {
+        if ('string' == typeof e && ['#', '+', '$'].indexOf(e.substr(e.length - 2)) > -2) {
+            let p = e.substr(e.length - 2);
+
+        }
         if (!this.cb[e]) {
             this.cb[e] = []
         }
@@ -163,4 +181,16 @@ export default class Mqtt {
             delete this.cb[e]
         }
     }
+}
+function match(topic: string, rule: string) {
+    let exp = rule
+    switch (rule.substr(rule.length - 2)) {
+        case '#':
+            exp = rule.replace('#', '[A-Za-z0-9/]+')
+            break;
+        case '+':
+            exp = rule.replace('+', '[A-Za-z0-9]+')
+            break;
+    }
+    return new RegExp(exp).test(topic)
 }
