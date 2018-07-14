@@ -41,6 +41,9 @@ export default class Mqtt {
         client.on('message', (topic: string, payload: any) => {
             this.message(topic.replace(this.prefix, ''), payload)
         })
+        client.on('end', () => {
+            this.isconnected = false;
+        })
         this.client = client;
     }
     async message(topic: string, payload: Buffer) {
@@ -94,9 +97,21 @@ export default class Mqtt {
         })
         this.publish(this.onlinePublish, this.uuid)
         this.fire(MqttEvent.CONNECTED, {})
+        this.isconnected = true;
+        this.noconnected.sub.forEach((r: any) => {
+            this.subscribe.apply(this, ...r)
+        })
+        this.noconnected.pub.forEach((r: any) => {
+            this.publish.apply(this, ...r)
+        })
+        this.noconnected.sub = [];
+        this.noconnected.pub = [];
     }
     error() { }
     publish(topic: string, data: any, all: boolean = false) {
+        if (!this.isconnected) {
+            this.noconnected.pub.push([...arguments])
+        }
         this.client.publish(this.prefix + topic, this.encode(data, all))
         this.fire(MqttEvent.PUBLISHED, {
             topic, data, all
@@ -151,6 +166,11 @@ export default class Mqtt {
         this.msgid++;
     }
     cmds: any = {};
+    noconnected = {
+        sub: [],
+        pub: []
+    }
+    isconnected = false
     service(command: string, cb: Function) {
         this.cmds[command] = cb
         this.subscribe(`${this.reqPrefix}/${this.uuid}/${command}/#`, QosType.ONLY_ONE, async (data) => {
@@ -190,6 +210,9 @@ export default class Mqtt {
         return rs;
     }
     subscribe(topic: string | string[], type: number, cb: (data: { all?: boolean, topic?: string, data?: any, uuid?: string }) => void) {
+        if (!this.isconnected) {
+            this.noconnected.sub.push([...arguments])
+        }
         if (topic instanceof Array) {
             topic.forEach(e => {
                 this.on(e, cb)
