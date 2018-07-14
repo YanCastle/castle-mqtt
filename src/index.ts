@@ -66,10 +66,10 @@ export default class Mqtt {
             r.type = DataType.Buffer
         } else if ('boolean' == typeof data) {
             r.type = DataType.Boolean
-            r.data = Buffer.alloc(1, data ? 1 : 0)
+            r.data = Buffer.alloc(1, data ? '1' : '0')
         } else if ('number' == typeof data) {
             r.type = DataType.Number
-            r.data = Buffer.alloc(1, data)
+            r.data = Buffer.alloc(data.toString().length, data.toString())
         } else if ('object' == typeof data) {
             r.type = DataType.Object;
             let d = JSON.stringify(data)
@@ -93,10 +93,11 @@ export default class Mqtt {
             data: null,
             type: 0
         }
-        let splitPos = data.toString().indexOf('|')
-        rs.all = Number(data[0]) == 1
-        rs.type = Number(data[1])
-        rs.uuid = data.toString().substr(2, splitPos - 1)
+        let str = data.toString()
+        let splitPos = str.indexOf('|')
+        rs.all = Number(str.substr(0, 1)) == 1
+        rs.type = Number(str.substr(1, 1))
+        rs.uuid = data.toString().substr(2, splitPos - 2)
         if (rs.type == DataType.Buffer) {
             rs.data = data.subarray(splitPos + 1)
         } else if (rs.type == DataType.String) {
@@ -104,9 +105,9 @@ export default class Mqtt {
         } else if (rs.type == DataType.Boolean) {
             rs.data = data.toString().substr(splitPos + 1) == '1'
         } else if (rs.type == DataType.Number) {
-            rs.data = Number(data.toString().substr(splitPos + 1))
+            rs.data = Number(str.substr(splitPos + 1))
         } else if (rs.type == DataType.Object) {
-            rs.data = JSON.parse(data.toString().substr(splitPos + 1))
+            rs.data = JSON.parse(str.substr(splitPos + 1))
         }
         return rs;
     }
