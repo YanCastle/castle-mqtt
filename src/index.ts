@@ -10,6 +10,14 @@ export enum MqttEvent {
     UNSUBSCRIBED = 2,
     CONNECTED = 3,
 }
+export enum DataType {
+    Buffer,
+    String,
+    Number,
+    Object,
+    Boolean,
+    Event
+}
 export default class Mqtt {
     client;
     prefix: string = '';
@@ -26,33 +34,81 @@ export default class Mqtt {
         })
         this.client = client;
     }
-    message(topic: string, payload: string) {
-        payload = payload.toString();
-        let all = payload.substr(0, 1) == '1'
-        let spos = payload.indexOf('|');
-        let uuid = payload.substr(1, spos - 1)
-        let data = payload.substr(spos + 2)
-        try {
-            let o = JSON.parse(data)
-            data = o;
-        } catch (error) {
-
-        } finally {
-            if (all || this.uuid == uuid)
-                this.fire(topic.replace(this.prefix, ''), {
-                    data,
-                    uuid,
-                    all
-                })
+    message(topic: string, payload: Buffer) {
+        let r = this.decode(payload)
+        if (r.all || (r.uuid == this.uuid)) {
+            this.fire(topic.replace(this.prefix, ''), {
+                data: r.data,
+                uuid: r.uuid,
+                all: r.all
+            })
         }
     }
     connected() { }
     error() { }
     publish(topic: string, data: any, all: boolean = false) {
-        this.client.publish(this.prefix + topic, (all ? 1 : 0) + this.uuid + '|' + (data instanceof String ? data : (data instanceof Buffer ? data : JSON.stringify(data))))
+        this.client.publish(this.prefix + topic, this.encode(data, all))
         this.fire(MqttEvent.PUBLISHED, {
             topic, data, all
         })
+    }
+    encode(data: any, all: boolean): Buffer {
+        let r = {
+            all,
+            data,
+            uuid: this.uuid,
+            type: 0,
+        }
+        if ("string" == typeof data) {
+            r.type = DataType.String
+            r.data = Buffer.alloc(data.length, data)
+        } else if (data instanceof Buffer) {
+            r.type = DataType.Buffer
+        } else if ('boolean' == typeof data) {
+            r.type = DataType.Boolean
+            r.data = Buffer.alloc(1, data ? 1 : 0)
+        } else if ('number' == typeof data) {
+            r.type = DataType.Number
+            r.data = Buffer.alloc(1, data)
+        } else if ('object' == typeof data) {
+            r.type = DataType.Object;
+            let d = JSON.stringify(data)
+            r.data = Buffer.alloc(d.length, d)
+        }
+        //是否全局广播，数据类型标记(0Buffer,1String,2Number,3Object,4Boolean,5Event)，
+        let d = Buffer.alloc(r.data.length + r.uuid.length + 3)
+        Buffer.alloc(3 + r.uuid.length, `${r.all ? 1 : 0}${r.type}${r.uuid}|`).copy(d, 0)
+        r.data.copy(d, 3 + r.uuid.length)
+        return d;
+    }
+    decode(data: Buffer): {
+        all: boolean,
+        uuid: string,
+        data: any,
+        type: DataType
+    } {
+        let rs = {
+            all: false,
+            uuid: '',
+            data: null,
+            type: 0
+        }
+        let splitPos = data.toString().indexOf('|')
+        rs.all = Number(data[0]) == 1
+        rs.type = Number(data[1])
+        rs.uuid = data.toString().substr(2, splitPos - 1)
+        if (rs.type == DataType.Buffer) {
+            rs.data = data.subarray(splitPos + 1)
+        } else if (rs.type == DataType.String) {
+            rs.data = data.toString().substr(splitPos + 1)
+        } else if (rs.type == DataType.Boolean) {
+            rs.data = data.toString().substr(splitPos + 1) == '1'
+        } else if (rs.type == DataType.Number) {
+            rs.data = Number(data.toString().substr(splitPos + 1))
+        } else if (rs.type == DataType.Object) {
+            rs.data = JSON.parse(data.toString().substr(splitPos + 1))
+        }
+        return rs;
     }
     subscribe(topic: string | string[], type: number, cb: (data: string, uuid: string, i: string) => void) {
         if (topic instanceof Array) {
