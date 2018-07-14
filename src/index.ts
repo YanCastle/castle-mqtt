@@ -93,6 +93,7 @@ export default class Mqtt {
             }, false)
         })
         this.publish(this.onlinePublish, this.uuid)
+        this.fire(MqttEvent.CONNECTED, {})
     }
     error() { }
     publish(topic: string, data: any, all: boolean = false) {
