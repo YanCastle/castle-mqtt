@@ -28,6 +28,10 @@ export default class Mqtt {
     match: any = {};
     reqPrefix = 'req'
     repPrefix = 'rep'
+    onlineReq = 'onlinereq'
+    onlineRep = 'onlinerep'
+    onlinePublish = 'online'
+    onlineData = {};
     constructor(url: string, prefix: string = '', uuid: string = '') {
         let client = connect(url)
         this.prefix = prefix;
@@ -81,7 +85,15 @@ export default class Mqtt {
             this.fire('error', error)
         }
     }
-    connected() { }
+    connected() {
+        this.subscribe(this.onlineReq, QosType.LESS_ONE, () => {
+            this.publish(this.onlineRep, {
+                uuid: this.uuid,
+                data: this.onlineData
+            }, false)
+        })
+        this.publish(this.onlinePublish, this.uuid)
+    }
     error() { }
     publish(topic: string, data: any, all: boolean = false) {
         this.client.publish(this.prefix + topic, this.encode(data, all))
