@@ -36,8 +36,12 @@ export default class Mqtt {
         let client = connect(url)
         this.prefix = prefix;
         this.uuid = uuid;
-        client.on('connect', this.connected)
-        client.on('error', this.error)
+        client.on('connect', () => {
+            this.connected()
+        })
+        client.on('error', () => {
+            this.error()
+        })
         client.on('message', (topic: string, payload: any) => {
             this.message(topic.replace(this.prefix, ''), payload)
         })
