@@ -61,14 +61,17 @@ export default class Mqtt {
                         let reptopic = topic.replace(`${this.reqPrefix}/`, `${this.repPrefix}/`).replace(this.uuid, r.uuid);
                         if (this.cmds[cmd] && this.cmds[cmd] instanceof Function) {
                             let rs = undefined;
-                            try {
-                                rs = await this.cmds[cmd](r.data)
-                                // 判断是否需要返回                            
-                            } catch (error) {
-
-                            } finally {
-                                this.publish(reptopic, rs, false)
-                            }
+                            new Promise(this.cmds[cmd](r.data)).then((rs) => {
+                                this.publish(reptopic, {
+                                    d: rs,
+                                    s: 1
+                                }, false)
+                            }).catch(error => {
+                                this.publish(reptopic, {
+                                    d: error,
+                                    s: 0
+                                }, false)
+                            })
                         }
                     } else {
                         // 响应来到
@@ -160,7 +163,7 @@ export default class Mqtt {
         let reqtopic = `${this.reqPrefix}/${who}/${command.replace('/', '|')}/${this.msgid}`
         let reptopic = reqtopic.replace(`${this.reqPrefix}/`, `${this.repPrefix}/`).replace(who, this.uuid);
         this.subscribe(reptopic, QosType.ONLY_ONE, (data) => {
-            cb(data.data)
+            cb(data.data.d, Number(data.data.s) == 1)
             this.unsubscribe(reptopic)
         })
         this.client.publish(this.prefix + reqtopic, this.encode(data, false, DataType.RPC))
